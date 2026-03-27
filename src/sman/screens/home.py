@@ -5,7 +5,7 @@ from __future__ import annotations
 from textual.app import ComposeResult
 from textual.containers import Center, Vertical
 from textual.screen import Screen
-from textual.widgets import Button, Static
+from textual.widgets import Button, Footer, Static
 
 
 class HomeScreen(Screen):
@@ -30,6 +30,7 @@ class HomeScreen(Screen):
                 yield Button("Repos [r]", id="btn-repos", variant="primary")
                 yield Button("Reports [d]", id="btn-reports", variant="primary")
                 yield Button("Settings [s]", id="btn-settings", variant="default")
+        yield Footer()
 
     def on_mount(self) -> None:
         self._update_org_info()

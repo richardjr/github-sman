@@ -80,6 +80,30 @@ Screen {
     margin-left: 1;
 }
 
+/* Help screen */
+HelpScreen {
+    align: center middle;
+}
+
+#help-container {
+    width: 50;
+    max-height: 80%;
+    background: $surface;
+    border: thick $accent;
+    padding: 1 2;
+}
+
+#help-text {
+    padding: 0 1;
+}
+
+#help-close-hint {
+    text-align: center;
+    color: $text-muted;
+    dock: bottom;
+    height: 1;
+}
+
 /* Settings screen */
 #settings-container {
     padding: 2 4;

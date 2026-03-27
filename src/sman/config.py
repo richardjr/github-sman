@@ -47,7 +47,15 @@ class Config:
 
     default_org: str = ""
     cache_ttl_seconds: int = 300
+    work_dir: str = ""
     orgs: list[OrgConfig] = field(default_factory=list)
+
+    @property
+    def resolved_work_dir(self) -> Path | None:
+        """Return the work_dir as an expanded Path, or None if not set."""
+        if not self.work_dir:
+            return None
+        return Path(self.work_dir).expanduser()
 
     @classmethod
     def load(cls, path: Path | None = None) -> Config:
@@ -75,6 +83,7 @@ class Config:
         return cls(
             default_org=general.get("default_org", ""),
             cache_ttl_seconds=general.get("cache_ttl_seconds", 300),
+            work_dir=general.get("work_dir", ""),
             orgs=orgs,
         )
 
@@ -87,6 +96,7 @@ class Config:
             "general": {
                 "default_org": self.default_org,
                 "cache_ttl_seconds": self.cache_ttl_seconds,
+                "work_dir": self.work_dir,
             },
             "orgs": [],
         }

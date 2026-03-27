@@ -3,12 +3,14 @@
 from __future__ import annotations
 
 from textual.app import ComposeResult
+from textual.binding import Binding
 from textual.containers import Vertical
 from textual.screen import Screen
 from textual.widgets import (
     Button,
     Checkbox,
     DataTable,
+    Footer,
     Input,
     Label,
     LoadingIndicator,
@@ -29,8 +31,8 @@ class RepoListScreen(Screen):
     """Screen showing all repos for the current org."""
 
     BINDINGS = [
-        ("c", "create_repo", "Create Repo"),
-        ("ctrl+r", "refresh", "Refresh"),
+        Binding("c", "create_repo", "Create Repo"),
+        Binding("ctrl+r", "refresh", "Refresh", key_display="^R"),
     ]
 
     def compose(self) -> ComposeResult:
@@ -38,6 +40,7 @@ class RepoListScreen(Screen):
             yield Static("Repositories", classes="title")
             yield LoadingIndicator(id="repo-loading")
             yield RepoTable(id="repo-table")
+        yield Footer()
 
     def on_mount(self) -> None:
         self.query_one("#repo-table", RepoTable).display = False
@@ -65,7 +68,7 @@ class RepoListScreen(Screen):
         self.query_one("#repo-loading", LoadingIndicator).display = False
         table = self.query_one("#repo-table", RepoTable)
         table.display = True
-        table.populate(repos)
+        table.populate(repos, self.app.config.resolved_work_dir)
 
     def on_data_table_row_selected(self, event: DataTable.RowSelected) -> None:
         if event.row_key and event.row_key.value:
@@ -84,15 +87,22 @@ class RepoListScreen(Screen):
 class RepoDetailScreen(Screen):
     """Detail view for a single repository."""
 
+    BINDINGS = [
+        Binding("g", "clone_repo", "Clone"),
+    ]
+
     def __init__(self, repo_name: str) -> None:
         super().__init__()
         self._repo_name = repo_name
+        self._detail = None
 
     def compose(self) -> ComposeResult:
         with Vertical(id="repo-detail-container"):
             yield Static(f"Repository: {self._repo_name}", classes="title")
             yield LoadingIndicator(id="detail-loading")
             yield Static("", id="detail-content")
+            yield Static("", id="clone-status")
+        yield Footer()
 
     def on_mount(self) -> None:
         self.run_worker(self._fetch_detail, thread=True)
@@ -105,10 +115,15 @@ class RepoDetailScreen(Screen):
         self.app.call_from_thread(self._display_detail, detail)
 
     def _display_detail(self, detail) -> None:
+        self._detail = detail
         self.query_one("#detail-loading", LoadingIndicator).display = False
         content = self.query_one("#detail-content", Static)
 
         import humanize
+
+        work_dir = self.app.config.resolved_work_dir
+        local_path = work_dir / detail.name if work_dir else None
+        is_cloned = local_path is not None and local_path.is_dir()
 
         lines = [
             f"[bold]{detail.full_name}[/bold]",
@@ -129,9 +144,58 @@ class RepoDetailScreen(Screen):
         ]
         if detail.topics:
             lines.append(f"  Topics:     {', '.join(detail.topics)}")
-        lines.append(f"\n  URL: {detail.html_url}")
+        lines.append(f"\n  URL:   {detail.html_url}")
+        lines.append(f"  SSH:   {detail.ssh_url}")
+        if is_cloned:
+            lines.append(f"\n  [green]Cloned at {local_path}[/green]")
+        elif work_dir:
+            lines.append(
+                "\n  [dim]Not cloned locally"
+                " — press [bold]g[/bold] to clone[/dim]"
+            )
 
         content.update("\n".join(lines))
+
+    def action_clone_repo(self) -> None:
+        """Clone the repo into work_dir."""
+        if not self._detail:
+            return
+        work_dir = self.app.config.resolved_work_dir
+        if not work_dir:
+            self.app.notify("Set work_dir in Settings first", severity="error")
+            return
+        local_path = work_dir / self._detail.name
+        if local_path.is_dir():
+            self.app.notify("Already cloned", severity="warning")
+            return
+        status = self.query_one("#clone-status", Static)
+        status.update("[yellow]Cloning...[/yellow]")
+        self.run_worker(
+            lambda: self._run_clone(self._detail.ssh_url, work_dir, local_path),
+            thread=True,
+        )
+
+    def _run_clone(self, ssh_url: str, work_dir, local_path) -> None:
+        import subprocess
+
+        try:
+            subprocess.run(
+                ["git", "clone", ssh_url],
+                cwd=work_dir,
+                capture_output=True,
+                text=True,
+                check=True,
+            )
+            self.app.call_from_thread(
+                self.query_one("#clone-status", Static).update,
+                f"[green]Cloned to {local_path}[/green]",
+            )
+        except subprocess.CalledProcessError as e:
+            msg = e.stderr.strip() if e.stderr else str(e)
+            self.app.call_from_thread(
+                self.query_one("#clone-status", Static).update,
+                f"[red]Clone failed: {msg}[/red]",
+            )
 
 
 class RepoCreateScreen(Screen):
@@ -148,6 +212,7 @@ class RepoCreateScreen(Screen):
             yield Checkbox("Initialize with README", value=True, id="repo-init")
             yield Button("Create", variant="success", id="btn-create")
             yield Static("", id="create-status")
+        yield Footer()
 
     def on_button_pressed(self, event: Button.Pressed) -> None:
         if event.button.id == "btn-create":

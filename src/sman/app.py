@@ -5,6 +5,7 @@ from __future__ import annotations
 from pathlib import Path
 
 from textual.app import App, ComposeResult
+from textual.binding import Binding
 from textual.widgets import Footer, Header
 
 from sman.config import Config
@@ -21,9 +22,10 @@ class SmanApp(App):
     CSS_PATH = Path("styles/app.tcss")
 
     BINDINGS = [
-        ("q", "quit", "Quit"),
-        ("o", "switch_org", "Switch Org"),
-        ("escape", "pop_screen", "Back"),
+        Binding("h", "show_help", "Help"),
+        Binding("q", "quit", "Quit"),
+        Binding("o", "switch_org", "Switch Org"),
+        Binding("escape", "pop_screen", "Back", key_display="Esc"),
     ]
 
     SCREENS = {
@@ -93,6 +95,13 @@ class SmanApp(App):
             switcher.query_one("#org-select").focus()
         except Exception:
             pass
+
+    def action_show_help(self) -> None:
+        """Show the help screen."""
+        from sman.screens.help import HelpScreen
+
+        if not isinstance(self.screen, HelpScreen):
+            self.push_screen(HelpScreen())
 
     def action_pop_screen(self) -> None:
         """Pop screen if not at the base."""

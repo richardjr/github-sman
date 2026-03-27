@@ -23,6 +23,7 @@ class RepoInfo:
     updated_at: datetime
     default_branch: str
     html_url: str
+    ssh_url: str
 
 
 @dataclass
@@ -57,6 +58,7 @@ def list_repos(client: GitHubClient, sort: str = "updated") -> list[RepoInfo]:
             updated_at=r.updated_at,
             default_branch=r.default_branch,
             html_url=r.html_url,
+            ssh_url=r.ssh_url,
         )
         for r in org.get_repos(sort=sort)
     ]
@@ -71,7 +73,8 @@ def get_repo_detail(client: GitHubClient, repo_name: str) -> RepoDetail:
     if cached is not None:
         return cached
 
-    r = client.github.get_repo(f"{client.name}/{repo_name}")
+    qualified = repo_name if "/" in repo_name else f"{client.name}/{repo_name}"
+    r = client.github.get_repo(qualified)
     detail = RepoDetail(
         name=r.name,
         full_name=r.full_name,
@@ -84,6 +87,7 @@ def get_repo_detail(client: GitHubClient, repo_name: str) -> RepoDetail:
         updated_at=r.updated_at,
         default_branch=r.default_branch,
         html_url=r.html_url,
+        ssh_url=r.ssh_url,
         created_at=r.created_at,
         pushed_at=r.pushed_at,
         size_kb=r.size,
@@ -128,4 +132,5 @@ def create_repo(client: GitHubClient, params: CreateRepoParams) -> RepoInfo:
         updated_at=r.updated_at,
         default_branch=r.default_branch,
         html_url=r.html_url,
+        ssh_url=r.ssh_url,
     )

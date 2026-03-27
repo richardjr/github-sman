@@ -5,7 +5,7 @@ from __future__ import annotations
 from textual.app import ComposeResult
 from textual.containers import Vertical
 from textual.screen import Screen
-from textual.widgets import Button, Checkbox, DataTable, Input, Label, Static
+from textual.widgets import Button, Checkbox, DataTable, Footer, Input, Label, Static
 
 from sman.config import OrgConfig
 
@@ -15,7 +15,14 @@ class SettingsScreen(Screen):
 
     def compose(self) -> ComposeResult:
         with Vertical(id="settings-container"):
-            yield Static("Settings — GitHub Orgs", classes="title")
+            yield Static("Settings", classes="title")
+            yield Static("General", classes="subtitle")
+            with Vertical(id="general-form"):
+                yield Label("Work directory (for cloning repos)")
+                yield Input(placeholder="~/Work", id="work-dir")
+            yield Button("Save General", variant="success", id="btn-save-general")
+            yield Static("")
+            yield Static("GitHub Orgs", classes="subtitle")
             yield DataTable(id="org-table")
             yield Static("")
             yield Static("Add / Edit Org", classes="subtitle")
@@ -31,8 +38,10 @@ class SettingsScreen(Screen):
             yield Button("Save Org", variant="success", id="btn-save-org")
             yield Button("Delete Selected", variant="error", id="btn-delete-org")
             yield Static("", id="settings-status")
+        yield Footer()
 
     def on_mount(self) -> None:
+        self.query_one("#work-dir", Input).value = self.app.config.work_dir
         table = self.query_one("#org-table", DataTable)
         table.cursor_type = "row"
         table.add_columns("Name", "Type", "Token Source", "Default")
@@ -51,10 +60,21 @@ class SettingsScreen(Screen):
             table.add_row(org.name, org.type, source, is_default, key=org.name)
 
     def on_button_pressed(self, event: Button.Pressed) -> None:
-        if event.button.id == "btn-save-org":
+        if event.button.id == "btn-save-general":
+            self._save_general()
+        elif event.button.id == "btn-save-org":
             self._save_org()
         elif event.button.id == "btn-delete-org":
             self._delete_org()
+
+    def _save_general(self) -> None:
+        work_dir = self.query_one("#work-dir", Input).value.strip()
+        config = self.app.config
+        config.work_dir = work_dir
+        config.save()
+        self.query_one("#settings-status", Static).update(
+            "[green]General settings saved[/green]"
+        )
 
     def _save_org(self) -> None:
         name = self.query_one("#org-name", Input).value.strip()

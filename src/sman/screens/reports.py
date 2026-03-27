@@ -5,9 +5,10 @@ from __future__ import annotations
 from datetime import datetime
 
 from textual.app import ComposeResult
+from textual.binding import Binding
 from textual.containers import Vertical
 from textual.screen import Screen
-from textual.widgets import LoadingIndicator, Static, TabbedContent, TabPane
+from textual.widgets import Footer, LoadingIndicator, Static, TabbedContent, TabPane
 
 from sman.github.activity import fetch_commits, fetch_pull_requests, fetch_reviews
 from sman.github.issues import fetch_issues
@@ -26,7 +27,7 @@ class ReportsScreen(Screen):
     """Tabbed reporting screen with date range filtering."""
 
     BINDINGS = [
-        ("ctrl+r", "refresh", "Refresh"),
+        Binding("ctrl+r", "refresh", "Refresh", key_display="^R"),
     ]
 
     def compose(self) -> ComposeResult:
@@ -45,6 +46,7 @@ class ReportsScreen(Screen):
                     yield IssueTable(id="issue-table")
                 with TabPane("Repo Stats", id="tab-stats"):
                     yield RepoStatsTable(id="stats-table")
+        yield Footer()
 
     def on_mount(self) -> None:
         self.query_one("#report-loading", LoadingIndicator).display = False
