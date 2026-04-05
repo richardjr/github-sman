@@ -182,6 +182,7 @@ class RepoDetailScreen(Screen):
         Binding("g", "clone_repo", "Clone"),
         Binding("c", "claude_terminal", "Claude"),
         Binding("n", "nvim_terminal", "Neovim"),
+        Binding("r", "refresh_detail", "Refresh"),
     ]
 
     def __init__(self, repo_name: str) -> None:
@@ -319,6 +320,11 @@ class RepoDetailScreen(Screen):
             )
 
         content.update("\n".join(lines))
+
+    def action_refresh_detail(self) -> None:
+        """Re-fetch repo detail from GitHub and re-read local git status."""
+        self.query_one("#detail-loading", LoadingIndicator).display = True
+        self.run_worker(self._fetch_detail, thread=True)
 
     def action_clone_repo(self) -> None:
         """Clone the repo into work_dir."""
