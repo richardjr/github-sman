@@ -182,6 +182,7 @@ class RepoDetailScreen(Screen):
         Binding("g", "clone_repo", "Clone"),
         Binding("c", "claude_terminal", "Claude"),
         Binding("n", "nvim_terminal", "Neovim"),
+        Binding("t", "plain_terminal", "Terminal"),
         Binding("r", "refresh_detail", "Refresh"),
     ]
 
@@ -374,6 +375,13 @@ class RepoDetailScreen(Screen):
     def action_nvim_terminal(self) -> None:
         """Open a new terminal window running `nvim .` in the local repo dir."""
         self._launch_in_terminal(["nvim", "."], label="nvim")
+
+    def action_plain_terminal(self) -> None:
+        """Open a new terminal window in the local repo dir (user's shell)."""
+        import os
+
+        shell = os.environ.get("SHELL", "bash")
+        self._launch_in_terminal([shell], label="terminal")
 
     def _launch_in_terminal(self, argv: list[str], label: str) -> None:
         if not self._detail:
