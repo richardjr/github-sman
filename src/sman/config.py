@@ -48,6 +48,7 @@ class Config:
     default_org: str = ""
     cache_ttl_seconds: int = 300
     work_dir: str = ""
+    terminal: str = ""
     orgs: list[OrgConfig] = field(default_factory=list)
 
     @property
@@ -84,6 +85,7 @@ class Config:
             default_org=general.get("default_org", ""),
             cache_ttl_seconds=general.get("cache_ttl_seconds", 300),
             work_dir=general.get("work_dir", ""),
+            terminal=general.get("terminal", ""),
             orgs=orgs,
         )
 
@@ -97,6 +99,7 @@ class Config:
                 "default_org": self.default_org,
                 "cache_ttl_seconds": self.cache_ttl_seconds,
                 "work_dir": self.work_dir,
+                "terminal": self.terminal,
             },
             "orgs": [],
         }

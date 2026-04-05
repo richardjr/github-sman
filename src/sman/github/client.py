@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+from pathlib import Path
 
 from github import Auth, Github
 from github.AuthenticatedUser import AuthenticatedUser
@@ -10,6 +11,7 @@ from github.Organization import Organization
 
 from sman.config import OrgConfig
 from sman.github.cache import Cache
+from sman.github.persistent_cache import PersistentCache, default_cache_dir
 
 
 @dataclass
@@ -20,18 +22,27 @@ class GitHubClient:
     org_type: str
     _github: Github = field(repr=False)
     _cache: Cache = field(repr=False)
+    _persistent_cache: PersistentCache = field(repr=False)
 
     @classmethod
-    def from_config(cls, org_config: OrgConfig, cache_ttl: int = 300) -> GitHubClient:
+    def from_config(
+        cls,
+        org_config: OrgConfig,
+        cache_ttl: int = 300,
+        cache_dir: Path | None = None,
+    ) -> GitHubClient:
         token = org_config.resolve_token()
         if not token:
             raise ValueError(f"No token configured for org '{org_config.name}'")
         gh = Github(auth=Auth.Token(token), per_page=100)
+        cache_dir = cache_dir or default_cache_dir()
+        persistent = PersistentCache(cache_dir / f"{org_config.name}.pkl")
         return cls(
             name=org_config.name,
             org_type=org_config.type,
             _github=gh,
             _cache=Cache(default_ttl=cache_ttl),
+            _persistent_cache=persistent,
         )
 
     def get_org(self) -> Organization | AuthenticatedUser:
@@ -47,6 +58,10 @@ class GitHubClient:
     @property
     def cache(self) -> Cache:
         return self._cache
+
+    @property
+    def persistent_cache(self) -> PersistentCache:
+        return self._persistent_cache
 
     def rate_limit_remaining(self) -> int:
         """Return remaining API calls before rate limit."""

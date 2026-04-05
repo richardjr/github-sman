@@ -64,7 +64,7 @@ class ReportsScreen(Screen):
         self.query_one("#report-loading", LoadingIndicator).display = True
         self.run_worker(lambda: self._fetch_all(since, until), thread=True)
 
-    async def _fetch_all(self, since: datetime, until: datetime) -> None:
+    def _fetch_all(self, since: datetime, until: datetime) -> None:
         client = self.app.current_client
         if not client:
             return

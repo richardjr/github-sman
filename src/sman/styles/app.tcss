@@ -45,6 +45,13 @@ Screen {
     height: 100%;
 }
 
+/* The detail screen shows cached content beneath the loading spinner while
+   a background refresh runs, so the spinner must not take the full height
+   of its Vertical container (LoadingIndicator's default is height: 100%). */
+#detail-loading {
+    height: 1;
+}
+
 #repo-create-form {
     padding: 2 4;
 }

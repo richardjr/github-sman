@@ -20,6 +20,11 @@ class SettingsScreen(Screen):
             with Vertical(id="general-form"):
                 yield Label("Work directory (for cloning repos)")
                 yield Input(placeholder="~/Work", id="work-dir")
+                yield Label("Terminal command (leave empty for system default)")
+                yield Input(
+                    placeholder="alacritty --working-directory={cwd} -e {cmd}",
+                    id="terminal-cmd",
+                )
             yield Button("Save General", variant="success", id="btn-save-general")
             yield Static("")
             yield Static("GitHub Orgs", classes="subtitle")
@@ -42,6 +47,7 @@ class SettingsScreen(Screen):
 
     def on_mount(self) -> None:
         self.query_one("#work-dir", Input).value = self.app.config.work_dir
+        self.query_one("#terminal-cmd", Input).value = self.app.config.terminal
         table = self.query_one("#org-table", DataTable)
         table.cursor_type = "row"
         table.add_columns("Name", "Type", "Token Source", "Default")
@@ -68,9 +74,9 @@ class SettingsScreen(Screen):
             self._delete_org()
 
     def _save_general(self) -> None:
-        work_dir = self.query_one("#work-dir", Input).value.strip()
         config = self.app.config
-        config.work_dir = work_dir
+        config.work_dir = self.query_one("#work-dir", Input).value.strip()
+        config.terminal = self.query_one("#terminal-cmd", Input).value.strip()
         config.save()
         self.query_one("#settings-status", Static).update(
             "[green]General settings saved[/green]"
