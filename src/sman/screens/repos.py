@@ -6,6 +6,7 @@ import humanize
 from textual.app import ComposeResult
 from textual.binding import Binding
 from textual.containers import Vertical
+from textual.coordinate import Coordinate
 from textual.screen import Screen
 from textual.widgets import (
     Button,
@@ -31,8 +32,11 @@ from sman.github.repos import (
     RepoDetailResult,
     create_repo,
     get_cached_repo_detail,
+    get_excluded_repos,
     get_repo_detail,
     list_repos,
+    set_excluded_repos,
+    toggle_repo_excluded,
 )
 from sman.local_repo import has_claude_md, launch_terminal
 from sman.widgets.repo_table import RepoTable
@@ -98,6 +102,8 @@ class RepoListScreen(Screen):
 
     BINDINGS = [
         Binding("c", "create_repo", "Create Repo"),
+        Binding("e", "toggle_report", "Toggle Report"),
+        Binding("E", "toggle_all_reports", "Toggle All"),
         Binding("r", "refresh", "Refresh"),
     ]
 
@@ -138,14 +144,17 @@ class RepoListScreen(Screen):
         self.app.call_from_thread(self._display_repos, result)
 
     def _display_repos(self, result: ListReposResult) -> None:
+        self._last_result = result
         self.query_one("#repo-loading", LoadingIndicator).display = False
         table = self.query_one("#repo-table", RepoTable)
         table.display = True
         client = getattr(self.app, "current_client", None)
+        excluded = get_excluded_repos(client) if client else set()
         table.populate(
             result.repos,
             self.app.config.resolved_work_dir,
             persistent_cache=client.persistent_cache if client else None,
+            excluded_repos=excluded,
         )
 
         status = self.query_one("#repo-status", Static)
@@ -167,6 +176,41 @@ class RepoListScreen(Screen):
     def on_data_table_row_selected(self, event: DataTable.RowSelected) -> None:
         if event.row_key and event.row_key.value:
             self.app.push_screen(RepoDetailScreen(event.row_key.value))
+
+    def action_toggle_report(self) -> None:
+        client = getattr(self.app, "current_client", None)
+        if not client:
+            return
+        table = self.query_one("#repo-table", RepoTable)
+        if table.row_count == 0:
+            return
+        row_key, _ = table.coordinate_to_cell_key(
+            Coordinate(table.cursor_row, 0)
+        )
+        if not row_key or not row_key.value:
+            return
+        short_name = row_key.value.rsplit("/", 1)[-1]
+        is_excluded = toggle_repo_excluded(client, short_name)
+        label = "excluded from" if is_excluded else "included in"
+        self.app.notify(f"{short_name} {label} reports")
+        if hasattr(self, "_last_result") and self._last_result is not None:
+            self._display_repos(self._last_result)
+
+    def action_toggle_all_reports(self) -> None:
+        client = getattr(self.app, "current_client", None)
+        if not client or not hasattr(self, "_last_result") or not self._last_result:
+            return
+        excluded = get_excluded_repos(client)
+        all_names = {r.name for r in self._last_result.repos}
+        if excluded & all_names:
+            # Some are excluded → include all
+            set_excluded_repos(client, excluded - all_names)
+            self.app.notify("All repos included in reports")
+        else:
+            # All included → exclude all
+            set_excluded_repos(client, excluded | all_names)
+            self.app.notify("All repos excluded from reports")
+        self._display_repos(self._last_result)
 
     def action_create_repo(self) -> None:
         self.app.push_screen(RepoCreateScreen())

@@ -26,6 +26,13 @@ class IssueActivity:
     closed_at: datetime | None
 
 
+@dataclass
+class IssueResult:
+    issues: list[IssueActivity]
+    cached_at: datetime
+    from_cache: bool
+
+
 def _fetch_repo_issues(
     repo: Repository, since: datetime, until: datetime, max_results: int
 ) -> list[IssueActivity]:
@@ -61,17 +68,36 @@ def fetch_issues(
     client: GitHubClient,
     since: datetime,
     until: datetime,
+    repo_names: list[str] | None = None,
     max_results: int = 500,
     max_workers: int = 5,
-) -> list[IssueActivity]:
-    """Fetch issue activity across all repos for the org."""
+    force_refresh: bool = False,
+) -> IssueResult:
+    """Fetch issue activity across repos for the org."""
     cache_key = f"issues:{client.name}:{since.date()}:{until.date()}"
-    cached = client.cache.get(cache_key)
-    if cached is not None:
-        return cached
+
+    if not force_refresh:
+        pcached = client.persistent_cache.get(cache_key)
+        if pcached is not None:
+            value, ts = pcached
+            return IssueResult(
+                issues=value,
+                cached_at=datetime.fromtimestamp(ts),
+                from_cache=True,
+            )
+        mcached = client.cache.get(cache_key)
+        if mcached is not None:
+            return IssueResult(
+                issues=mcached, cached_at=datetime.now(), from_cache=True
+            )
 
     org = client.get_org()
-    repos = list(org.get_repos(sort="updated"))
+    all_repos = list(org.get_repos(sort="updated"))
+    if repo_names is not None:
+        name_set = set(repo_names)
+        repos = [r for r in all_repos if r.name in name_set]
+    else:
+        repos = all_repos
 
     all_issues: list[IssueActivity] = []
     with ThreadPoolExecutor(max_workers=max_workers) as pool:
@@ -88,4 +114,23 @@ def fetch_issues(
     all_issues.sort(key=lambda i: i.created_at, reverse=True)
     all_issues = all_issues[:max_results]
     client.cache.set(cache_key, all_issues)
-    return all_issues
+    client.persistent_cache.set(cache_key, all_issues)
+    return IssueResult(
+        issues=all_issues, cached_at=datetime.now(), from_cache=False
+    )
+
+
+def get_cached_issues(
+    client: GitHubClient, since: datetime, until: datetime
+) -> IssueResult | None:
+    """Return cached issues without network calls, or None."""
+    cache_key = f"issues:{client.name}:{since.date()}:{until.date()}"
+    cached = client.persistent_cache.get(cache_key)
+    if cached is None:
+        return None
+    value, ts = cached
+    return IssueResult(
+        issues=value,
+        cached_at=datetime.fromtimestamp(ts),
+        from_cache=True,
+    )

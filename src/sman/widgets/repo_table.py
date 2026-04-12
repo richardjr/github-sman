@@ -20,7 +20,7 @@ class RepoTable(DataTable):
     def on_mount(self) -> None:
         self.cursor_type = "row"
         self.add_columns(
-            "S", "Local", "Name", "Language", "Stars", "Forks",
+            "S", "R", "Local", "Name", "Language", "Stars", "Forks",
             "Issues", "Updated", "Visibility",
         )
 
@@ -29,6 +29,7 @@ class RepoTable(DataTable):
         repos: list[RepoInfo],
         work_dir: Path | None = None,
         persistent_cache: PersistentCache | None = None,
+        excluded_repos: set[str] | None = None,
     ) -> None:
         """Clear and repopulate the table with repo data.
 
@@ -36,8 +37,12 @@ class RepoTable(DataTable):
         ``GitLocalStatus`` per repo, used to render the single-character
         status column. The list view never runs git itself — if no cache
         exists, the column shows "?" until the user opens the detail page.
+
+        ``excluded_repos`` controls the "R" (report) column — repos in
+        the set show blank, others show "✓".
         """
         self.clear()
+        _excluded = excluded_repos or set()
         for repo in repos:
             local_path = work_dir / repo.name if work_dir is not None else None
             is_local = local_path is not None and local_path.is_dir()
@@ -58,8 +63,11 @@ class RepoTable(DataTable):
                 char, colour = ("", "bright_black")
             status_cell = Text(char, style=colour)
 
+            report_marker = "" if repo.name in _excluded else "✓"
+
             self.add_row(
                 status_cell,
+                report_marker,
                 local_marker,
                 repo.name,
                 repo.language or "-",

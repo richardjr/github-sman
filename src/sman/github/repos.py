@@ -203,3 +203,53 @@ def create_repo(client: GitHubClient, params: CreateRepoParams) -> RepoInfo:
     client.persistent_cache.invalidate_prefix(prefix)
 
     return _build_repo_info(r)
+
+
+# ---------------------------------------------------------------------------
+# Report inclusion / exclusion helpers
+# ---------------------------------------------------------------------------
+
+
+def get_excluded_repos(client: GitHubClient) -> set[str]:
+    """Return the set of repo names excluded from reports."""
+    cache_key = f"excluded_repos:{client.name}"
+    cached = client.persistent_cache.get(cache_key)
+    if cached is None:
+        return set()
+    value, _ts = cached
+    return value if isinstance(value, set) else set()
+
+
+def set_excluded_repos(client: GitHubClient, excluded: set[str]) -> None:
+    """Persist the set of repo names excluded from reports."""
+    cache_key = f"excluded_repos:{client.name}"
+    client.persistent_cache.set(cache_key, excluded)
+
+
+def toggle_repo_excluded(client: GitHubClient, repo_name: str) -> bool:
+    """Toggle a repo's excluded status. Returns True if now excluded."""
+    excluded = get_excluded_repos(client)
+    if repo_name in excluded:
+        excluded.discard(repo_name)
+        result = False
+    else:
+        excluded.add(repo_name)
+        result = True
+    set_excluded_repos(client, excluded)
+    return result
+
+
+def get_report_repo_names(client: GitHubClient) -> list[str] | None:
+    """Return names of repos included in reports (not excluded).
+
+    Uses the persistent cache's repo list.  Returns ``None`` when
+    no repo list has been cached yet so callers can fall back to
+    fetching all repos.
+    """
+    cache_key = f"repos:{client.name}:updated"
+    cached = client.persistent_cache.get(cache_key)
+    if cached is None:
+        return None
+    repos, _ts = cached
+    excluded = get_excluded_repos(client)
+    return [r.name for r in repos if r.name not in excluded]

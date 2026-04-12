@@ -50,6 +50,32 @@ class ReviewActivity:
     submitted_at: datetime
 
 
+# ---------------------------------------------------------------------------
+# Result wrappers (cache metadata)
+# ---------------------------------------------------------------------------
+
+
+@dataclass
+class CommitResult:
+    commits: list[CommitActivity]
+    cached_at: datetime
+    from_cache: bool
+
+
+@dataclass
+class PullRequestResult:
+    prs: list[PullRequestActivity]
+    cached_at: datetime
+    from_cache: bool
+
+
+@dataclass
+class ReviewResult:
+    reviews: list[ReviewActivity]
+    cached_at: datetime
+    from_cache: bool
+
+
 def _fetch_repo_commits(
     repo: Repository, since: datetime, until: datetime, max_results: int
 ) -> list[CommitActivity]:
@@ -133,17 +159,36 @@ def fetch_commits(
     client: GitHubClient,
     since: datetime,
     until: datetime,
+    repo_names: list[str] | None = None,
     max_results: int = 500,
     max_workers: int = 5,
-) -> list[CommitActivity]:
-    """Fetch commits across all repos for the org within a date range."""
+    force_refresh: bool = False,
+) -> CommitResult:
+    """Fetch commits across repos for the org within a date range."""
     cache_key = f"commits:{client.name}:{since.date()}:{until.date()}"
-    cached = client.cache.get(cache_key)
-    if cached is not None:
-        return cached
+
+    if not force_refresh:
+        pcached = client.persistent_cache.get(cache_key)
+        if pcached is not None:
+            value, ts = pcached
+            return CommitResult(
+                commits=value,
+                cached_at=datetime.fromtimestamp(ts),
+                from_cache=True,
+            )
+        mcached = client.cache.get(cache_key)
+        if mcached is not None:
+            return CommitResult(
+                commits=mcached, cached_at=datetime.now(), from_cache=True
+            )
 
     org = client.get_org()
-    repos = list(org.get_repos(sort="updated"))
+    all_repos = list(org.get_repos(sort="updated"))
+    if repo_names is not None:
+        name_set = set(repo_names)
+        repos = [r for r in all_repos if r.name in name_set]
+    else:
+        repos = all_repos
 
     all_commits: list[CommitActivity] = []
     with ThreadPoolExecutor(max_workers=max_workers) as pool:
@@ -160,24 +205,46 @@ def fetch_commits(
     all_commits.sort(key=lambda c: c.date, reverse=True)
     all_commits = all_commits[:max_results]
     client.cache.set(cache_key, all_commits)
-    return all_commits
+    client.persistent_cache.set(cache_key, all_commits)
+    return CommitResult(
+        commits=all_commits, cached_at=datetime.now(), from_cache=False
+    )
 
 
 def fetch_pull_requests(
     client: GitHubClient,
     since: datetime,
     until: datetime,
+    repo_names: list[str] | None = None,
     max_results: int = 500,
     max_workers: int = 5,
-) -> list[PullRequestActivity]:
-    """Fetch PR activity across all repos."""
+    force_refresh: bool = False,
+) -> PullRequestResult:
+    """Fetch PR activity across repos."""
     cache_key = f"prs:{client.name}:{since.date()}:{until.date()}"
-    cached = client.cache.get(cache_key)
-    if cached is not None:
-        return cached
+
+    if not force_refresh:
+        pcached = client.persistent_cache.get(cache_key)
+        if pcached is not None:
+            value, ts = pcached
+            return PullRequestResult(
+                prs=value,
+                cached_at=datetime.fromtimestamp(ts),
+                from_cache=True,
+            )
+        mcached = client.cache.get(cache_key)
+        if mcached is not None:
+            return PullRequestResult(
+                prs=mcached, cached_at=datetime.now(), from_cache=True
+            )
 
     org = client.get_org()
-    repos = list(org.get_repos(sort="updated"))
+    all_repos = list(org.get_repos(sort="updated"))
+    if repo_names is not None:
+        name_set = set(repo_names)
+        repos = [r for r in all_repos if r.name in name_set]
+    else:
+        repos = all_repos
 
     all_prs: list[PullRequestActivity] = []
     with ThreadPoolExecutor(max_workers=max_workers) as pool:
@@ -194,24 +261,46 @@ def fetch_pull_requests(
     all_prs.sort(key=lambda p: p.created_at, reverse=True)
     all_prs = all_prs[:max_results]
     client.cache.set(cache_key, all_prs)
-    return all_prs
+    client.persistent_cache.set(cache_key, all_prs)
+    return PullRequestResult(
+        prs=all_prs, cached_at=datetime.now(), from_cache=False
+    )
 
 
 def fetch_reviews(
     client: GitHubClient,
     since: datetime,
     until: datetime,
+    repo_names: list[str] | None = None,
     max_results: int = 500,
     max_workers: int = 5,
-) -> list[ReviewActivity]:
-    """Fetch code review activity across all repos."""
+    force_refresh: bool = False,
+) -> ReviewResult:
+    """Fetch code review activity across repos."""
     cache_key = f"reviews:{client.name}:{since.date()}:{until.date()}"
-    cached = client.cache.get(cache_key)
-    if cached is not None:
-        return cached
+
+    if not force_refresh:
+        pcached = client.persistent_cache.get(cache_key)
+        if pcached is not None:
+            value, ts = pcached
+            return ReviewResult(
+                reviews=value,
+                cached_at=datetime.fromtimestamp(ts),
+                from_cache=True,
+            )
+        mcached = client.cache.get(cache_key)
+        if mcached is not None:
+            return ReviewResult(
+                reviews=mcached, cached_at=datetime.now(), from_cache=True
+            )
 
     org = client.get_org()
-    repos = list(org.get_repos(sort="updated"))
+    all_repos = list(org.get_repos(sort="updated"))
+    if repo_names is not None:
+        name_set = set(repo_names)
+        repos = [r for r in all_repos if r.name in name_set]
+    else:
+        repos = all_repos
 
     all_reviews: list[ReviewActivity] = []
     with ThreadPoolExecutor(max_workers=max_workers) as pool:
@@ -228,4 +317,60 @@ def fetch_reviews(
     all_reviews.sort(key=lambda r: r.submitted_at, reverse=True)
     all_reviews = all_reviews[:max_results]
     client.cache.set(cache_key, all_reviews)
-    return all_reviews
+    client.persistent_cache.set(cache_key, all_reviews)
+    return ReviewResult(
+        reviews=all_reviews, cached_at=datetime.now(), from_cache=False
+    )
+
+
+# ---------------------------------------------------------------------------
+# Read-only cache accessors (no network calls)
+# ---------------------------------------------------------------------------
+
+
+def get_cached_commits(
+    client: GitHubClient, since: datetime, until: datetime
+) -> CommitResult | None:
+    """Return cached commits without network calls, or None."""
+    cache_key = f"commits:{client.name}:{since.date()}:{until.date()}"
+    cached = client.persistent_cache.get(cache_key)
+    if cached is None:
+        return None
+    value, ts = cached
+    return CommitResult(
+        commits=value,
+        cached_at=datetime.fromtimestamp(ts),
+        from_cache=True,
+    )
+
+
+def get_cached_pull_requests(
+    client: GitHubClient, since: datetime, until: datetime
+) -> PullRequestResult | None:
+    """Return cached PRs without network calls, or None."""
+    cache_key = f"prs:{client.name}:{since.date()}:{until.date()}"
+    cached = client.persistent_cache.get(cache_key)
+    if cached is None:
+        return None
+    value, ts = cached
+    return PullRequestResult(
+        prs=value,
+        cached_at=datetime.fromtimestamp(ts),
+        from_cache=True,
+    )
+
+
+def get_cached_reviews(
+    client: GitHubClient, since: datetime, until: datetime
+) -> ReviewResult | None:
+    """Return cached reviews without network calls, or None."""
+    cache_key = f"reviews:{client.name}:{since.date()}:{until.date()}"
+    cached = client.persistent_cache.get(cache_key)
+    if cached is None:
+        return None
+    value, ts = cached
+    return ReviewResult(
+        reviews=value,
+        cached_at=datetime.fromtimestamp(ts),
+        from_cache=True,
+    )
