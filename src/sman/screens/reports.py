@@ -90,7 +90,7 @@ class ReportsScreen(Screen):
         # Phase 2: background refresh
         self.query_one("#report-loading", LoadingIndicator).display = True
         self.run_worker(
-            lambda: self._fetch_all(since, until, force_refresh=True),
+            lambda: self._fetch_all(since, until, force_refresh=False),
             thread=True,
         )
 
