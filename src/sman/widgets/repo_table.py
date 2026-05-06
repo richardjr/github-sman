@@ -20,7 +20,7 @@ class RepoTable(DataTable):
     def on_mount(self) -> None:
         self.cursor_type = "row"
         self.add_columns(
-            "S", "R", "Local", "Name", "Language", "Stars", "Forks",
+            "S", "R", "Local", "Branch", "Name", "Language", "Stars", "Forks",
             "Issues", "Updated", "Visibility",
         )
 
@@ -53,6 +53,7 @@ class RepoTable(DataTable):
             else:
                 local_marker = ""
 
+            cached_status = None
             if is_local and persistent_cache is not None:
                 cached_status = get_cached_local_status(
                     persistent_cache, repo.name
@@ -63,12 +64,15 @@ class RepoTable(DataTable):
                 char, colour = ("", "bright_black")
             status_cell = Text(char, style=colour)
 
+            branch_cell = cached_status.branch if cached_status else ""
+
             report_marker = "" if repo.name in _excluded else "✓"
 
             self.add_row(
                 status_cell,
                 report_marker,
                 local_marker,
+                branch_cell,
                 repo.name,
                 repo.language or "-",
                 str(repo.stars),
